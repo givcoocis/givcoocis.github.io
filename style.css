@@ -6,7 +6,7 @@
 :root{
 --accent-color: grey;
 --base-color: white;
---text-color: black;
+--text-color: rgb(52, 35, 35);
 --input-color: grey;
 }
 
