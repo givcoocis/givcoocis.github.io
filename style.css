@@ -38,7 +38,21 @@ body div input[type=text]{
     width: 60%;
     height: 20%;
     border-radius: 12px;
+    transition-duration: 0.4s;
 
+}
+body div input[type=text]:focus{
+  font-size: 30px;
+  padding: 12px 20px;
+  animation-name: mystery;
+  animation-iteration-count: infinite;
+  animation-duration: 10s;
+}
+
+@keyframes mystery{
+  0%{background-color: white;}
+  50%{background-color: grey;}
+  100%{background-color: white;}
 }
 
 body div button{
