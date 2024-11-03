@@ -49,9 +49,17 @@ body div input[type=text]:focus{
   animation-duration: 10s;
 }
 
+body div input[type=text]:hover{
+  font-size: 30px;
+  padding: 12px 20px;
+  animation-name: mystery;
+  animation-iteration-count: infinite;
+  animation-duration: 10s;
+}
+
 @keyframes mystery{
   0%{background-color: white;}
-  50%{background-color: grey;}
+  50%{background-color: rgb(183, 183, 183);}
   100%{background-color: white;}
 }
 
