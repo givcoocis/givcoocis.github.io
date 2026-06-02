@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atlas Arcade</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕹️</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+  <style>
+    :root {
+      --bg:        #07080f;
+      --surface:   #0d0f1e;
+      --card:      #111428;
+      --border:    #1e2240;
+      --cyan:      #00f5ff;
+      --magenta:   #ff00cc;
+      --orange:    #ff6a00;
+      --yellow:    #ffe600;
+      --text:      #c8d0e8;
+      --muted:     #4a5070;
+      --glow-c:    0 0 8px #00f5ff88, 0 0 24px #00f5ff44;
+      --glow-m:    0 0 8px #ff00cc88, 0 0 24px #ff00cc44;
+      --glow-o:    0 0 8px #ff6a0088, 0 0 24px #ff6a0044;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 14px;
+      min-height: 100vh;
+      overflow-x: hidden;
+      cursor: crosshair;
+    }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.18) 2px,
+        rgba(0,0,0,0.18) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* CRT vignette */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.7) 100%);
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(7,8,15,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(0.7rem, 2vw, 1rem);
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.2s;
+    }
+    .logo:hover { color: var(--magenta); text-shadow: var(--glow-m); }
+    .logo span { color: var(--magenta); }
+
+    .header-right {
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+    .header-right strong { color: var(--orange); }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 4rem 2rem 2.5rem;
+      position: relative;
+    }
+
+    .hero-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(1.4rem, 5vw, 3rem);
+      line-height: 1.5;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+      animation: flicker 6s infinite;
+    }
+
+    .hero-title .accent { color: var(--magenta); text-shadow: var(--glow-m); }
+
+    .hero-sub {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    @keyframes flicker {
+      0%,96%,100% { opacity: 1; }
+      97% { opacity: 0.85; }
+      98% { opacity: 1; }
+      99% { opacity: 0.7; }
+    }
+
+    /* ── SEARCH / FILTER ── */
+    .controls {
+      max-width: 900px;
+      margin: 0 auto 2.5rem;
+      padding: 0 2rem;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .search-wrap {
+      flex: 1;
+      min-width: 200px;
+      position: relative;
+    }
+
+    .search-wrap::before {
+      content: '▶';
+      position: absolute;
+      left: 0.8rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--cyan);
+      font-size: 0.7rem;
+      pointer-events: none;
+    }
+
+    input[type="search"] {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.85rem;
+      padding: 0.6rem 0.8rem 0.6rem 2rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input[type="search"]:focus {
+      border-color: var(--cyan);
+      box-shadow: var(--glow-c);
+    }
+    input[type="search"]::placeholder { color: var(--muted); }
+
+    .filter-tags {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .tag-btn {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      padding: 0.35rem 0.75rem;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all 0.15s;
+      letter-spacing: 0.05em;
+    }
+    .tag-btn:hover, .tag-btn.active {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: var(--glow-c);
+    }
+    .tag-btn.active { background: rgba(0,245,255,0.06); }
+
+    /* ── GAME GRID ── */
+    .game-grid {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .game-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1.25rem 1rem 1rem;
+      cursor: pointer;
+      transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      position: relative;
+      overflow: hidden;
+      animation: cardIn 0.4s ease both;
+    }
+
+    .game-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(0,245,255,0.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .game-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      border-color: var(--cyan);
+      box-shadow: var(--glow-c), 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    .game-card:nth-child(3n+2):hover {
+      border-color: var(--magenta);
+      box-shadow: var(--glow-m), 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .game-card:nth-child(3n+3):hover {
+      border-color: var(--orange);
+      box-shadow: var(--glow-o), 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-icon {
+      font-size: 2.4rem;
+      line-height: 1;
+    }
+
+    .card-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.55rem;
+      line-height: 1.6;
+      color: #e8eeff;
+      letter-spacing: 0.03em;
+    }
+
+    .card-genres {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: auto;
+    }
+
+    .genre-pill {
+      font-size: 0.6rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 2px;
+      letter-spacing: 0.05em;
+    }
+    .genre-pill:nth-child(1) { background: rgba(0,245,255,0.12); color: var(--cyan); border: 1px solid rgba(0,245,255,0.25); }
+    .genre-pill:nth-child(2) { background: rgba(255,0,204,0.10); color: var(--magenta); border: 1px solid rgba(255,0,204,0.2); }
+    .genre-pill:nth-child(3) { background: rgba(255,106,0,0.10); color: var(--orange); border: 1px solid rgba(255,106,0,0.2); }
+
+    .no-results {
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 4rem;
+      color: var(--muted);
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.7rem;
+      line-height: 2;
+    }
+
+    /* ── GAME PAGE ── */
+    #game-view { display: none; }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--cyan);
+      background: transparent;
+      border: 1px solid var(--cyan);
+      padding: 0.5rem 1rem;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.08em;
+      margin: 1.5rem 2rem;
+    }
+    .back-btn:hover {
+      background: rgba(0,245,255,0.1);
+      box-shadow: var(--glow-c);
+    }
+
+    .game-page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    .game-page-header {
+      margin-bottom: 1.5rem;
+    }
+
+    .game-page-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+
+    .game-page-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(0.9rem, 3vw, 1.5rem);
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+      line-height: 1.5;
+      margin-bottom: 0.75rem;
+    }
+
+    .game-page-genres {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .game-page-desc {
+      font-size: 0.85rem;
+      color: var(--text);
+      line-height: 1.8;
+      max-width: 640px;
+      border-left: 2px solid var(--magenta);
+      padding-left: 1rem;
+    }
+
+    .game-embed-wrapper {
+      margin-top: 2rem;
+      border: 1px solid var(--border);
+      background: #000;
+      border-radius: 3px;
+      overflow: hidden;
+      box-shadow: var(--glow-c), 0 16px 64px rgba(0,0,0,0.6);
+      position: relative;
+    }
+
+    .game-embed-wrapper::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 1px solid rgba(0,245,255,0.15);
+      pointer-events: none;
+      z-index: 1;
+      border-radius: 3px;
+    }
+
+    #ruffle-container, #iframe-container {
+      width: 100%;
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #ruffle-container ruffle-player,
+    #iframe-container iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    .loading-msg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.65rem;
+      color: var(--cyan);
+      animation: blink 1s step-end infinite;
+      pointer-events: none;
+    }
+
+    @keyframes blink {
+      0%,100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+    footer a { color: var(--cyan); text-decoration: none; }
+    footer a:hover { text-shadow: var(--glow-c); }
+
+    /* ── PIXEL GRID BG ── */
+    .pixel-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,245,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,245,255,0.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    main { position: relative; z-index: 1; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .game-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.8rem; padding: 0 1rem 3rem; }
+      .hero { padding: 2.5rem 1rem 1.5rem; }
+      .controls { padding: 0 1rem; }
+      .game-page { padding: 0 1rem 3rem; }
+      .back-btn { margin: 1rem; }
+      header { padding: 0 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="pixel-bg"></div>
+
+<header>
+  <div class="logo" id="header-logo">🕹️ ATLAS <span>ARCADE</span></div>
+  <div class="header-right" id="game-count-display"></div>
+</header>
+
+<main>
+  <!-- HOME VIEW -->
+  <div id="home-view">
+    <section class="hero">
+      <h1 class="hero-title">ATLAS <span class="accent">ARCADE</span></h1>
+      <p class="hero-sub">// Your classic flash game destination — powered by Ruffle //</p>
+    </section>
+
+    <div class="controls">
+      <div class="search-wrap">
+        <input type="search" id="search-input" placeholder="Search games..." autocomplete="off" />
+      </div>
+      <div class="filter-tags" id="filter-tags"></div>
+    </div>
+
+    <div class="game-grid" id="game-grid"></div>
+  </div>
+
+  <!-- GAME VIEW -->
+  <div id="game-view">
+    <button class="back-btn" id="back-btn">◀ BACK TO ARCADE</button>
+    <div class="game-page">
+      <div class="game-page-header">
+        <div class="game-page-icon" id="gp-icon"></div>
+        <h2 class="game-page-title" id="gp-title"></h2>
+        <div class="game-page-genres" id="gp-genres"></div>
+        <p class="game-page-desc" id="gp-desc"></p>
+      </div>
+      <div class="game-embed-wrapper">
+        <div class="loading-msg" id="loading-msg">LOADING GAME...</div>
+        <div id="ruffle-container"></div>
+        <div id="iframe-container" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <p>ATLAS ARCADE &copy; 2025 &nbsp;|&nbsp; Powered by <a href="https://ruffle.rs" target="_blank">Ruffle</a> &nbsp;|&nbsp; Classic Flash games preserved.</p>
+</footer>
+
+<script>
+  const GAMES = [
+    { id:"run3", title:"Run 3", swf:"https://archive.org/download/run3_/run3.swf", genre:["Endless Runner","Skill"], desc:"Run, skate, and jump through a series of tunnels in space. Don't fall off the edge!", icon:"🏃" },
+    { id:"gswitch3", title:"G-Switch 3", poki:"https://poki.com/embed/g-switch-3", genre:["Endless Runner","Multiplayer"], desc:"Gravity-defying running game with insane speed. Play solo or with up to 8 players!", icon:"🔄" },
+    { id:"ultsonicflash", title:"Ultimate Flash Sonic", swf:"https://archive.org/download/ultimate-flash-sonic_202101/ultimate-flash-sonic.swf", genre:["Platformer","Classic"], desc:"Play as Sonic in this fan-made classic platformer with all the zones you love.", icon:"⚡" },
+    { id:"impossiblequiz", title:"The Impossible Quiz", swf:"https://archive.org/download/impossible-quiz-deluxe-newgrounds/365143_Impossible_Quiz_Deluxe_NG..swf", genre:["Trivia","Puzzle"], desc:"A devilishly tricky quiz that will break your brain and your mouse. Think outside the box!", icon:"❓" },
+    { id:"btd5", title:"Bloons TD 5", swf:"https://archive.org/download/bloons-tower-defense-5_20210409/bloons-tower-defense-5.swf", genre:["Tower Defense","Strategy"], desc:"Pop every last balloon with an arsenal of monkey towers. The definitive BTD experience.", icon:"🎈" },
+    { id:"fancypants", title:"Fancy Pants Adventures", swf:"https://archive.org/download/FPA-1/fancy-pants-adventur-301.swf", genre:["Platformer","Classic"], desc:"A stickman in fancy pants runs, flips, and slides through a beautifully hand-drawn world.", icon:"👖" },
+    { id:"raze2", title:"Raze 2", swf:"https://archive.org/download/raze-2/Raze%202.swf", genre:["Shooter","Action"], desc:"Intense sci-fi shooter with campaign and skirmish modes. Unlock weapons and upgrades.", icon:"🔫" },
+    { id:"strikeheros", title:"Strike Force Heroes", swf:"https://archive.org/download/strike-force-heroes-flash-game-series./strike_force_heroes_1.swf", genre:["Shooter","Action"], desc:"Build your elite squad and battle through missions in this action-packed side-scroller.", icon:"💥" },
+    { id:"sonny", title:"Sonny", swf:"https://archive.org/download/sonny-flash-game-series./417513_Sonny.swf", genre:["RPG","Turn-Based"], desc:"A zombie with a conscience. Turn-based RPG with deep combat and a mysterious storyline.", icon:"🧟" },
+    { id:"papaspizzeria", title:"Papa's Pizzeria", swf:"https://archive.org/download/papaspizzeria_v2/papaspizzeria_v2.swf", genre:["Cooking","Simulation"], desc:"Manage Papa's pizza joint — take orders, bake pies, and keep customers happy!", icon:"🍕" },
+    { id:"defendcastle", title:"Defend Your Castle", swf:"https://archive.org/download/defendyourcastle_flash/102209_castle202c.swf", genre:["Defense","Action"], desc:"Fling stick figures into the abyss and protect your castle from the oncoming horde.", icon:"🏰" },
+    { id:"redball", title:"Red Ball", swf:"https://archive.org/download/red-ball_/RedBall_17Levels.swf", genre:["Platformer","Puzzle"], desc:"A simple red ball on a big adventure. Roll, jump, and solve your way through 17 levels.", icon:"🔴" },
+    { id:"learntfly", title:"Learn to Fly", swf:"https://archive.org/download/flash_learn-to-fly/flash_learn-to-fly.swf", genre:["Upgrade","Casual"], desc:"Help a penguin learn to fly! Buy upgrades and launch further with every attempt.", icon:"🐧" },
+    { id:"hobo", title:"Hobo", swf:"https://archive.org/download/hobo-5-space-brawl-attack-of-the-hobo-clones/hobo.swf", genre:["Beat 'em Up","Action"], desc:"The original dirty brawler. Fight your way through the streets with disgusting combo attacks.", icon:"👊" },
+    { id:"cursor10", title:"Cursor*10", swf:"https://archive.org/download/cursor10_flash/cursor10.swf", genre:["Puzzle","Unique"], desc:"Collaborate with your past cursors to reach the top floor. A mind-bending puzzle experience.", icon:"🖱️" },
+    { id:"dolphinolympics", title:"Dolphin Olympics 2", swf:"https://archive.org/download/dolphin-olympics-2/dolphin_olympics2.swf", genre:["Arcade","Score Attack"], desc:"Leap, spin, and soar as a dolphin chasing the ultimate high score. Addictively satisfying.", icon:"🐬" },
+    { id:"shift", title:"Shift", swf:"https://archive.org/download/shift_flash/shift-751817f.swf", genre:["Platformer","Puzzle"], desc:"Flip the world upside down to navigate through tricky black-and-white levels.", icon:"🔁" },
+    { id:"thingthing", title:"Thing Thing Arena 3", swf:"https://archive.org/download/thingthingarenaclassic1thing-thing-flash-game-series/485863_tta3_secure.swf", genre:["Shooter","Arena"], desc:"Survive endless waves of enemies in this fast-paced arena shooter. Customize your character.", icon:"🎯" },
+    { id:"boxhead", title:"Boxhead: Halloween", swf:"https://archive.org/download/boxhead-flash-game-series./boxhead_halloween.swf", genre:["Shooter","Survival"], desc:"Survive Halloween night as hordes of zombies close in. Place barricades and blast away.", icon:"🎃" },
+    { id:"castlecrash", title:"Castle Crashing the Beard", swf:"https://archive.org/download/castle-crashing-the-beard_202207/Castle%20Crashing%20the%20Beard.swf", genre:["Beat 'em Up","Classic"], desc:"The original Castle Crashers prototype. Beat up the Beard in this legendary Newgrounds classic.", icon:"🗡️" },
+    { id:"interactivebuddy", title:"Interactive Buddy", swf:"https://archive.org/download/interactive_buddy_v_1_02_by_shock_value_d6ma8m/interactive_buddy_v_1_02_by_shock_value_d6ma8m.swf", genre:["Sandbox","Casual"], desc:"Smack, burn, and befriend your little virtual buddy. A mindless stress-reliever since 2005.", icon:"🤖" },
+    { id:"cubefield", title:"Cubefield", swf:"https://archive.org/download/cubefield_flash/cubefield.swf", genre:["Endless","Skill"], desc:"Dodge an infinite field of cubes at breakneck speed. How far can you go?", icon:"🟦" }
+  ];
+
+  // Collect unique genre tags
+  const allGenres = [...new Set(GAMES.flatMap(g => g.genre))].sort();
+
+  let activeFilter = null;
+  let searchTerm = '';
+  let currentGameId = null;
+
+  // ── ROUTING ──
+  function navigate(gameId) {
+    currentGameId = gameId || null;
+    if (gameId) {
+      document.getElementById('home-view').style.display = 'none';
+      document.getElementById('game-view').style.display = 'block';
+      renderGamePage(gameId);
+    } else {
+      document.getElementById('game-view').style.display = 'none';
+      document.getElementById('home-view').style.display = 'block';
+      teardownGame();
+    }
+    window.scrollTo(0, 0);
+  }
+
+  // ── HOME ──
+  function renderHome() {
+    renderFilterTags();
+    renderGrid();
+    document.getElementById('game-count-display').innerHTML =
+      `<strong>${GAMES.length}</strong> GAMES`;
+  }
+
+  function renderFilterTags() {
+    const wrap = document.getElementById('filter-tags');
+    wrap.innerHTML = '';
+    allGenres.forEach(g => {
+      const btn = document.createElement('button');
+      btn.className = 'tag-btn' + (activeFilter === g ? ' active' : '');
+      btn.textContent = g;
+      btn.onclick = () => {
+        activeFilter = activeFilter === g ? null : g;
+        renderFilterTags();
+        renderGrid();
+      };
+      wrap.appendChild(btn);
+    });
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById('game-grid');
+    const term = searchTerm.toLowerCase();
+    const filtered = GAMES.filter(g => {
+      const matchSearch = !term || g.title.toLowerCase().includes(term) || g.genre.some(t => t.toLowerCase().includes(term));
+      const matchFilter = !activeFilter || g.genre.includes(activeFilter);
+      return matchSearch && matchFilter;
+    });
+
+    grid.innerHTML = '';
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="no-results">NO GAMES FOUND<br><br>try a different search</div>';
+      return;
+    }
+
+    filtered.forEach((game, i) => {
+      const card = document.createElement('div');
+      card.className = 'game-card';
+      card.style.animationDelay = `${i * 0.03}s`;
+      card.innerHTML = `
+        <div class="card-icon">${game.icon}</div>
+        <div class="card-title">${game.title}</div>
+        <div class="card-genres">
+          ${game.genre.map(g => `<span class="genre-pill">${g}</span>`).join('')}
+        </div>
+      `;
+      card.onclick = () => navigate(game.id);
+      grid.appendChild(card);
+    });
+  }
+
+  // ── GAME PAGE ──
+  function renderGamePage(id) {
+    const game = GAMES.find(g => g.id === id);
+    if (!game) { navigate(null); return; }
+
+    document.getElementById('gp-icon').textContent = game.icon;
+    document.getElementById('gp-title').textContent = game.title;
+    document.getElementById('gp-desc').textContent = game.desc;
+    document.getElementById('gp-genres').innerHTML = game.genre
+      .map(g => `<span class="genre-pill">${g}</span>`).join('');
+
+    const ruffleWrap = document.getElementById('ruffle-container');
+    const iframeWrap = document.getElementById('iframe-container');
+    const loadMsg    = document.getElementById('loading-msg');
+
+    ruffleWrap.innerHTML = '';
+    iframeWrap.innerHTML = '';
+    ruffleWrap.style.display = 'none';
+    iframeWrap.style.display = 'none';
+    loadMsg.style.display = 'flex';
+
+    if (game.poki) {
+      iframeWrap.style.display = 'flex';
+      const iframe = document.createElement('iframe');
+      iframe.src = game.poki;
+      iframe.allowFullscreen = true;
+      iframe.allow = "autoplay; fullscreen";
+      iframe.onload = () => { loadMsg.style.display = 'none'; };
+      iframeWrap.appendChild(iframe);
+    } else if (game.swf) {
+      ruffleWrap.style.display = 'flex';
+      setTimeout(() => {
+        try {
+          const ruffle = window.RufflePlayer.newest();
+          const player = ruffle.createPlayer();
+          player.style.width  = '100%';
+          player.style.height = '100%';
+          ruffleWrap.appendChild(player);
+          player.load(game.swf).then(() => {
+            loadMsg.style.display = 'none';
+          }).catch(() => {
+            loadMsg.textContent = 'FAILED TO LOAD — SWF MAY BE UNAVAILABLE';
+            loadMsg.style.animation = 'none';
+            loadMsg.style.opacity = '1';
+            loadMsg.style.color = 'var(--magenta)';
+          });
+        } catch(e) {
+          loadMsg.textContent = 'RUFFLE NOT READY — TRY REFRESHING';
+          loadMsg.style.animation = 'none';
+          loadMsg.style.opacity = '1';
+        }
+      }, 80);
+    }
+  }
+
+  function teardownGame() {
+    document.getElementById('ruffle-container').innerHTML = '';
+    document.getElementById('iframe-container').innerHTML = '';
+    const loadMsg = document.getElementById('loading-msg');
+    loadMsg.textContent = 'LOADING GAME...';
+    loadMsg.style.display = 'flex';
+    loadMsg.style.animation = 'blink 1s step-end infinite';
+    loadMsg.style.color = 'var(--cyan)';
+  }
+
+  // ── EVENTS ──
+  document.getElementById('back-btn').onclick = () => navigate(null);
+  document.getElementById('header-logo').onclick = () => navigate(null);
+
+  document.getElementById('search-input').addEventListener('input', e => {
+    searchTerm = e.target.value;
+    renderGrid();
+  });
+
+  // ── INIT ──
+  renderHome();
+</script>
+</body>
+</html>
